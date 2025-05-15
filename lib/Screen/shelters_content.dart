@@ -18,11 +18,20 @@ class _SheltersContentState extends State<SheltersContent> {
   bool showApproved = false;
   int _rowsPerPage = 10;
   int _currentPage = 0;
+  TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool isDarkMode = false;
 
   @override
   void initState() {
     super.initState();
     _fetchShelters();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchShelters() async {
@@ -225,8 +234,6 @@ class _SheltersContentState extends State<SheltersContent> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildDetailRow(
-                    'ID', _extractShelterId(shelterData)?.toString() ?? 'N/A'),
                 _buildDetailRow('Name', info['shelter_name']),
                 _buildDetailRow('Address', info['shelter_address']),
                 _buildDetailRow('Contact', info['shelter_contact']),
@@ -278,8 +285,17 @@ class _SheltersContentState extends State<SheltersContent> {
     );
   }
 
-  List<dynamic> _getPaginatedShelters() {
-    final shelters = showApproved ? approvedShelters : pendingShelters;
+  List<dynamic> _filterShelters(List<dynamic> shelters) {
+    if (_searchQuery.isEmpty) return shelters;
+
+    return shelters.where((shelter) {
+      final info = shelter['info'] ?? {};
+      final name = info['shelter_name']?.toString().toLowerCase() ?? '';
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  List<dynamic> _getPaginatedShelters(List<dynamic> shelters) {
     final startIndex = _currentPage * _rowsPerPage;
     final endIndex = startIndex + _rowsPerPage;
     return shelters.sublist(
@@ -301,13 +317,18 @@ class _SheltersContentState extends State<SheltersContent> {
           children: [
             Text(
               errorMessage,
-              style: const TextStyle(color: Colors.red, fontSize: 16),
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.red,
+                fontSize: 16,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _fetchShelters,
               style: ElevatedButton.styleFrom(
+                backgroundColor: isDarkMode ? Colors.grey[800] : Colors.blue,
+                foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -318,214 +339,333 @@ class _SheltersContentState extends State<SheltersContent> {
       );
     }
 
-    final shelters = showApproved ? approvedShelters : pendingShelters;
-    final paginatedShelters = _getPaginatedShelters();
+    final filteredShelters = showApproved
+        ? _filterShelters(approvedShelters)
+        : _filterShelters(pendingShelters);
+
+    final paginatedShelters = _getPaginatedShelters(filteredShelters);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Shelter Management'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchShelters,
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  showApproved
-                      ? 'Approved Shelters (${approvedShelters.length})'
-                      : 'Pending Shelters (${pendingShelters.length})',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Row for Pending/Approved Shelters
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    showApproved
+                        ? 'Approved Shelters (${filteredShelters.length})'
+                        : 'Pending Shelters (${filteredShelters.length})',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          isDarkMode ? Colors.white : const Color(0xff1e1e20),
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    const Text('Show Approved'),
-                    Switch(
-                      value: showApproved,
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            showApproved = !showApproved; // Toggle the state
+                            _currentPage = 0; // Reset the current page
+                          });
+                        },
+                        child: Text(
+                          showApproved ? 'Show Pending' : 'Show Approved',
+                          style: TextStyle(
+                            color: isDarkMode ? Colors.blue[300] : Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: MediaQuery.of(context).size.width *
+                        0.4, // 40% of the screen width
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search by shelter name...',
+                        hintStyle: TextStyle(
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                          borderSide: BorderSide(
+                            color: isDarkMode
+                                ? Colors.grey[700]!
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: isDarkMode ? Colors.grey[800] : Colors.white,
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: isDarkMode
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700],
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchController.clear();
+                                    _searchQuery = '';
+                                    _currentPage = 0;
+                                  });
+                                },
+                              )
+                            : null,
+                      ),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
                       onChanged: (value) {
                         setState(() {
-                          showApproved = value;
+                          _searchQuery = value;
                           _currentPage = 0;
                         });
                       },
-                      activeColor: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Data Table
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Container(
+                    width: constraints.maxWidth,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color:
+                            isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      color: isDarkMode ? Colors.grey[900] : Colors.white,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: DataTable(
+                            columns: const [
+                              DataColumn(
+                                  label: Text('Name',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Contact',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Email',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Status',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Actions',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                            ],
+                            rows: paginatedShelters.map((shelter) {
+                              final info = shelter['info'] ?? {};
+                              final status = _isShelterApproved(shelter)
+                                  ? 'Approved'
+                                  : 'Pending';
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 200),
+                                      child: Text(
+                                        info['shelter_name'] ??
+                                            'Unnamed Shelter',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: isDarkMode
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(Text(
+                                    info['shelter_contact'] ?? 'Not provided',
+                                    style: TextStyle(
+                                      color: isDarkMode
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ),
+                                  )),
+                                  DataCell(Text(
+                                    info['shelter_email'] ?? 'Not provided',
+                                    style: TextStyle(
+                                      color: isDarkMode
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ),
+                                  )),
+                                  DataCell(
+                                    Chip(
+                                      label: Text(
+                                        status,
+                                        style: TextStyle(
+                                          color: status == 'Approved'
+                                              ? Colors.green
+                                              : Colors.orange,
+                                        ),
+                                      ),
+                                      backgroundColor: status == 'Approved'
+                                          ? Colors.green[50]
+                                          : Colors.orange[50],
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.visibility,
+                                            size: 20,
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : Colors.black,
+                                          ),
+                                          onPressed: () =>
+                                              _showShelterDialog(shelter),
+                                          tooltip: 'View Details',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                            headingRowColor:
+                                MaterialStateProperty.resolveWith<Color>(
+                              (Set<MaterialState> states) => isDarkMode
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[200]!,
+                            ),
+                            dataRowHeight: 60,
+                            headingRowHeight: 50,
+                            horizontalMargin: 20,
+                            columnSpacing: 30,
+                            showCheckboxColumn: false,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Pagination Controls
+            if (filteredShelters.length > _rowsPerPage)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    DropdownButton<int>(
+                      value: _rowsPerPage,
+                      dropdownColor:
+                          isDarkMode ? Colors.grey[800] : Colors.white,
+                      items: [5, 10, 25, 50].map((int value) {
+                        return DropdownMenuItem<int>(
+                          value: value,
+                          child: Text(
+                            '$value per page',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _rowsPerPage = value;
+                            _currentPage = 0;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      '${_currentPage * _rowsPerPage + 1}-${(_currentPage + 1) * _rowsPerPage > filteredShelters.length ? filteredShelters.length : (_currentPage + 1) * _rowsPerPage} of ${filteredShelters.length}',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
+                      onPressed: _currentPage > 0
+                          ? () {
+                              setState(() {
+                                _currentPage--;
+                              });
+                            }
+                          : null,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: isDarkMode ? Colors.white : Colors.black,
+                      ),
+                      onPressed: (_currentPage + 1) * _rowsPerPage <
+                              filteredShelters.length
+                          ? () {
+                              setState(() {
+                                _currentPage++;
+                              });
+                            }
+                          : null,
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(
-                              label: Text('ID',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(
-                              label: Text('Name',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(
-                              label: Text('Contact',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(
-                              label: Text('Email',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(
-                              label: Text('Status',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(
-                              label: Text('Actions',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        rows: paginatedShelters.map((shelter) {
-                          final info = shelter['info'] ?? {};
-                          final shelterId =
-                              _extractShelterId(shelter)?.toString() ?? 'N/A';
-                          final status = _isShelterApproved(shelter)
-                              ? 'Approved'
-                              : 'Pending';
-
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(shelterId)),
-                              DataCell(
-                                ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 150),
-                                  child: Text(
-                                    info['shelter_name'] ?? 'Unnamed Shelter',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text(
-                                  info['shelter_contact'] ?? 'Not provided')),
-                              DataCell(Text(
-                                  info['shelter_email'] ?? 'Not provided')),
-                              DataCell(
-                                Chip(
-                                  label: Text(
-                                    status,
-                                    style: TextStyle(
-                                      color: status == 'Approved'
-                                          ? Colors.green
-                                          : Colors.orange,
-                                    ),
-                                  ),
-                                  backgroundColor: status == 'Approved'
-                                      ? Colors.green[50]
-                                      : Colors.orange[50],
-                                ),
-                              ),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.visibility,
-                                          size: 20),
-                                      onPressed: () =>
-                                          _showShelterDialog(shelter),
-                                      tooltip: 'View Details',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                        headingRowColor:
-                            MaterialStateProperty.resolveWith<Color>(
-                          (Set<MaterialState> states) => Colors.grey[200]!,
-                        ),
-                        dataRowHeight: 60,
-                        headingRowHeight: 50,
-                        horizontalMargin: 12,
-                        columnSpacing: 20,
-                        showCheckboxColumn: false,
-                      ),
-                    ),
-                  ),
-                ),
-                if (shelters.length > _rowsPerPage)
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        DropdownButton<int>(
-                          value: _rowsPerPage,
-                          items: [5, 10, 25, 50].map((int value) {
-                            return DropdownMenuItem<int>(
-                              value: value,
-                              child: Text('$value per page'),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _rowsPerPage = value;
-                                _currentPage = 0;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          '${_currentPage * _rowsPerPage + 1}-${(_currentPage + 1) * _rowsPerPage > shelters.length ? shelters.length : (_currentPage + 1) * _rowsPerPage} of ${shelters.length}',
-                        ),
-                        const SizedBox(width: 16),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_left),
-                          onPressed: _currentPage > 0
-                              ? () {
-                                  setState(() {
-                                    _currentPage--;
-                                  });
-                                }
-                              : null,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_right),
-                          onPressed: (_currentPage + 1) * _rowsPerPage <
-                                  shelters.length
-                              ? () {
-                                  setState(() {
-                                    _currentPage++;
-                                  });
-                                }
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+              ),
+          ],
+        ),
       ),
     );
   }

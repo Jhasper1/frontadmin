@@ -3,10 +3,7 @@ import 'dashboard_content.dart';
 import 'shelters_content.dart';
 import 'adopters_content.dart';
 import 'settings_content.dart';
-// Import new screens as needed
-// import 'pending_shelter_approvals.dart';
-// import 'reported_users.dart';
-// import 'blocked_users.dart';
+import 'blocked_users.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,8 +20,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _getSelectedContent() {
     switch (_selectedItem) {
-      case 'Pending Shelter Approvals':
-        return const Center(child: Text('Pending Shelter Approvals Page'));
       case 'All Shelter Accounts':
         return const SheltersContent();
       case 'Adopters List':
@@ -32,7 +27,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'Reported Users':
         return const Center(child: Text('Reported Users Page'));
       case 'Blocked Users':
-        return const Center(child: Text('Blocked Users Page'));
+        return const InactiveAdoptersPage();
       case 'Admin Profile':
         return const SettingsContent();
       default:
@@ -46,70 +41,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
       key: _scaffoldKey,
       body: Row(
         children: [
-          // Sidebar
-          MouseRegion(
-            onEnter: (_) => setState(() => _isHovered = true),
-            onExit: (_) => setState(() => _isHovered = false),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: _isHovered ? 220 : 60,
-              height: double.infinity,
-              color: const Color(0xff0d0d27),
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      // Logo
-                      Container(
-                        height: 80,
-                        padding: const EdgeInsets.all(10),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.pets,
-                                color: Colors.white, size: 30),
-                            if (_isHovered)
-                              const Padding(
-                                padding: EdgeInsets.only(left: 10),
-                                child: Text(
-                                  'PetAdopt',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+          // Sidebar - Smooth Animation
+          Material(
+            elevation: 4,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _isHovered = true),
+              onExit: (_) => setState(() => _isHovered = false),
+              child: AnimatedContainer(
+                duration: const Duration(
+                    milliseconds: 300), // Smooth animation duration
+                curve: Curves.easeInOut, // Smooth easing curve
+                width: _isHovered ? 220 : 60, // Animate width on hover
+                color: const Color.fromARGB(
+                    135, 158, 158, 158), // Uniform sidebar color
+                child: Column(
+                  children: [
+                    // Logo Section
+                    Container(
+                      height: 80,
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.pets, color: Colors.white, size: 30),
+                          if (_isHovered)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 10),
+                              child: Text(
+                                'PetHub',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
-                      const Divider(color: Colors.white54, height: 1),
+                    ),
+                    const Divider(color: Colors.white54, height: 1),
 
-                      // Menu Items
-                      Expanded(
-                        child: ListView(
-                          padding: EdgeInsets.zero,
-                          children: [
-                            _buildMenuItem('Dashboard', Icons.dashboard),
-                            _buildMenuItem('Pending Shelter Approvals',
-                                Icons.pending_actions),
-                            _buildMenuItem(
-                                'All Shelter Accounts', Icons.home_work),
-                            _buildMenuItem('Adopters List', Icons.people),
-                            _buildMenuItem('Reported Users', Icons.report),
-                            _buildMenuItem('Blocked Users', Icons.block),
-                            _buildMenuItem('Admin Profile', Icons.settings),
-                          ],
-                        ),
+                    // Menu Items with vertical scroll
+                    Expanded(
+                      child: ListView(
+                        padding: EdgeInsets.zero,
+                        children: [
+                          _buildMenuItem('Dashboard', Icons.dashboard),
+                          _buildMenuItem(
+                              'All Shelter Accounts', Icons.home_work),
+                          _buildMenuItem('Adopters List', Icons.people),
+                          _buildMenuItem('Reported Users', Icons.report),
+                          _buildMenuItem('Blocked Users', Icons.block),
+                          _buildMenuItem('Admin Profile', Icons.settings),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
 
-                  // Admin Info
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
+                    // Admin Info
+                    Container(
                       padding: const EdgeInsets.symmetric(
                           vertical: 10, horizontal: 10),
                       decoration: const BoxDecoration(
@@ -134,17 +122,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Main Content Area
+          // Main content area with app bar
           Expanded(
-            child: Container(
-              color: Colors.grey[100],
-              child: _getSelectedContent(),
+            child: Column(
+              children: [
+                // Static AppBar
+                Container(
+                  color: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Title of the current page
+                      Text(
+                        _selectedItem,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      // Icons on the right side
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.dark_mode,
+                                color: Colors.black),
+                            onPressed: () {
+                              // Handle dark mode toggle
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.notifications,
+                                color: Colors.black),
+                            onPressed: () {
+                              // Handle notifications
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.admin_panel_settings,
+                                color: Colors.black),
+                            onPressed: () {
+                              // Handle admin settings
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Main Content Area
+                Expanded(
+                  child: Container(
+                    color: Colors.grey[100],
+                    child: _getSelectedContent(),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -163,17 +205,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           });
         },
         child: Container(
-          color: isSelected ? const Color(0xff3b3b40) : Colors.transparent,
+          color: isSelected
+              ? Colors.white
+                  .withOpacity(0.3) // Highlight color: white with low opacity
+              : Colors.transparent, // Default background color
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white),
+              Icon(
+                icon,
+                color: isSelected
+                    ? const Color.fromARGB(
+                        152, 90, 85, 176) // Icon color for selected item
+                    : const Color.fromARGB(
+                        152, 90, 85, 176), // Icon color for unselected items
+              ),
               if (_isHovered)
                 Padding(
                   padding: const EdgeInsets.only(left: 10),
                   child: Text(
                     title,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: isSelected
+                          ? Colors.black // Text color for selected item
+                          : Colors.black, // Text color for unselected items
+                    ),
                   ),
                 ),
             ],

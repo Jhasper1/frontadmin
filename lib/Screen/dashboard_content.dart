@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:convert'; // Import the custom container
 
 class DashboardContent extends StatefulWidget {
   const DashboardContent({super.key});
@@ -20,6 +20,8 @@ class _DashboardContentState extends State<DashboardContent> {
   bool isLoading = true;
   String errorMessage = '';
   int touchedIndex = -1;
+
+  bool isDarkMode = false; // Theme toggle state
 
   @override
   void initState() {
@@ -72,80 +74,127 @@ class _DashboardContentState extends State<DashboardContent> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const Center(child: CircularProgressIndicator());
-    if (errorMessage.isNotEmpty) return Center(child: Text(errorMessage));
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Pethub Dashboard',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                  child: _buildStatCard('Shelters', shelterCount, Icons.home)),
-              const SizedBox(width: 16),
-              Expanded(
-                  child:
-                      _buildStatCard('Adopters', adopterCount, Icons.people)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildStatCard('Pets', petCount, Icons.pets)),
-              const SizedBox(width: 16),
-              Expanded(
-                  child: _buildStatCard(
-                      'Adopted Pets', adoptedPetCount, Icons.favorite)),
-            ],
-          ),
-          const SizedBox(height: 30),
-          const Text(
-            'Shelter Status',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          if (shelterCount > 0)
-            SizedBox(
-              height: 300,
-              child: PieChart(
-                PieChartData(
-                  sections: _buildPieSections(),
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 60,
-                  pieTouchData: PieTouchData(
-                    touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                      setState(() {
-                        if (!event.isInterestedForInteractions ||
-                            pieTouchResponse == null ||
-                            pieTouchResponse.touchedSection == null) {
-                          touchedIndex = -1;
-                        } else {
-                          touchedIndex = pieTouchResponse
-                              .touchedSection!.touchedSectionIndex;
-                        }
-                      });
-                    },
+    return Scaffold(
+      body: Container(
+        width: double.infinity, // Ensures the container spans the full width
+        height: double.infinity, // Ensures the container spans the full height
+        decoration: BoxDecoration(
+          color: isDarkMode
+              ? const Color(0xff010104) // Dark mode background
+              : const Color(0xfffbfbfe), // Light mode background
+        ),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : errorMessage.isNotEmpty
+                ? Center(child: Text(errorMessage))
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildStatCard(
+                                  'Shelters', shelterCount, Icons.home_rounded),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildStatCard(
+                                  'Adopters', adopterCount, Icons.people),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                                child: _buildStatCard(
+                                    'Pets', petCount, Icons.pets)),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildStatCard('Adopted Pets',
+                                  adoptedPetCount, Icons.favorite),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 30),
+                        if (shelterCount > 0)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDarkMode
+                                  ? Color.fromARGB(
+                                      235, 34, 34, 34) // Dark mode background
+                                  : Colors.grey[
+                                      200], // Light gray background for light mode
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                if (!isDarkMode)
+                                  BoxShadow(
+                                    color:
+                                        const Color.fromARGB(187, 158, 158, 158)
+                                            .withOpacity(0.2),
+                                    spreadRadius: 2,
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 3),
+                                  ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Shelter Status',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  height: 300,
+                                  child: PieChart(
+                                    PieChartData(
+                                      sections: _buildPieSections(),
+                                      sectionsSpace: 2,
+                                      centerSpaceRadius: 60,
+                                      pieTouchData: PieTouchData(
+                                        touchCallback: (FlTouchEvent event,
+                                            pieTouchResponse) {
+                                          setState(() {
+                                            if (!event
+                                                    .isInterestedForInteractions ||
+                                                pieTouchResponse == null ||
+                                                pieTouchResponse
+                                                        .touchedSection ==
+                                                    null) {
+                                              touchedIndex = -1;
+                                            } else {
+                                              touchedIndex = pieTouchResponse
+                                                  .touchedSection!
+                                                  .touchedSectionIndex;
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _buildLegendItem(
+                                        'Approved', Color(0xff908cde)),
+                                    const SizedBox(width: 20),
+                                    _buildLegendItem(
+                                        'Pending', Color(0xFF544fbf)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 30),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            ),
-          if (shelterCount > 0)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLegendItem('Approved', Colors.green),
-                const SizedBox(width: 20),
-                _buildLegendItem('Pending', Colors.orange),
-              ],
-            ),
-        ],
       ),
     );
   }
@@ -158,7 +207,7 @@ class _DashboardContentState extends State<DashboardContent> {
       if (index == 0) {
         return PieChartSectionData(
           value: approvedShelters.toDouble(),
-          color: Colors.green,
+          color: Color(0xFF544fbf),
           title: isTouched
               ? '$approvedShelters shelters'
               : '${((approvedShelters / shelterCount) * 100).toStringAsFixed(1)}%',
@@ -169,7 +218,7 @@ class _DashboardContentState extends State<DashboardContent> {
       } else {
         return PieChartSectionData(
           value: pendingShelters.toDouble(),
-          color: Colors.orange,
+          color: Color(0xff908cde),
           title: isTouched
               ? '$pendingShelters shelters'
               : '${((pendingShelters / shelterCount) * 100).toStringAsFixed(1)}%',
@@ -183,7 +232,10 @@ class _DashboardContentState extends State<DashboardContent> {
 
   Widget _buildStatCard(String title, int count, IconData icon) {
     return Card(
-      elevation: 4,
+      elevation: 0,
+      color: isDarkMode
+          ? const Color.fromARGB(165, 37, 33, 115) // Dark mode card background
+          : const Color(0x6B908CDE), // Light mode card background
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -192,20 +244,33 @@ class _DashboardContentState extends State<DashboardContent> {
           children: [
             Text(
               count.toString(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: isDarkMode
+                    ? Colors.white // White text for dark mode
+                    : Colors.black, // Black text for light mode
               ),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                Icon(icon, size: 24, color: Colors.blue),
+                Icon(
+                  icon,
+                  size: 24,
+                  color: isDarkMode
+                      ? Colors.white // White icon for dark mode
+                      : Colors.black, // Black icon for light mode
+                ),
                 const SizedBox(width: 8),
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 16),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDarkMode
+                        ? Colors.white // White text for dark mode
+                        : Colors.black, // Black text for light mode
+                  ),
                 ),
               ],
             ),
@@ -221,7 +286,12 @@ class _DashboardContentState extends State<DashboardContent> {
       children: [
         Container(width: 16, height: 16, color: color),
         const SizedBox(width: 8),
-        Text(text),
+        Text(
+          text,
+          style: TextStyle(
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
+        ),
       ],
     );
   }
