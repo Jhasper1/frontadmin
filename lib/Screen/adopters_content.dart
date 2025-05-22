@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'adopter_details_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AdoptersPage extends StatefulWidget {
@@ -35,7 +34,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
       Uri.parse('http://127.0.0.1:5566/api/admin/getalladopters'),
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer $token", // Use the token from the widget
+        "Authorization": "Bearer $token",
       },
     );
 
@@ -44,7 +43,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
       setState(() {
         isLoading = false;
         adopters = List<Map<String, dynamic>>.from(data['data']);
-        filteredAdopters = adopters; // Initialize filtered list
+        filteredAdopters = adopters;
       });
     } else {
       setState(() {
@@ -66,7 +65,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
                 .toLowerCase();
         return fullName.contains(query.toLowerCase());
       }).toList();
-      currentPage = 0; // Reset pagination
+      currentPage = 0;
     });
   }
 
@@ -79,16 +78,101 @@ class _AdoptersPageState extends State<AdoptersPage> {
     );
   }
 
+  void _showAdopterDetails(Map<String, dynamic> adopter) {
+    final adopterInfo = adopter['info'] ?? {};
+    final adopterAccount = adopter['adopter'] ?? {};
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20), // Adds padding on sides
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 600, // Set maximum width
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Adopter Details',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDetailRow('Name',
+                      '${adopterInfo['first_name'] ?? ''} ${adopterInfo['last_name'] ?? ''}'),
+                  _buildDetailRow('Email', adopterInfo['email'] ?? 'N/A'),
+                  _buildDetailRow(
+                      'Phone', adopterInfo['contact_number'] ?? 'N/A'),
+                  _buildDetailRow('Address', adopterInfo['address'] ?? 'N/A'),
+                  _buildDetailRow('Gender', adopterInfo['sex'] ?? 'N/A'),
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        width: double.infinity, // Ensures the container spans the full width
-        height: double.infinity, // Ensures the container spans the full height
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
-          color: isDarkMode
-              ? const Color(0xff1e1e20) // Dark mode background
-              : const Color(0xfffbfbfe), // Light mode background
+          color: isDarkMode ? const Color(0xff1e1e20) : const Color(0xfffbfbfe),
         ),
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -96,7 +180,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    // Search Bar
+                    // Search Bar (unchanged)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16.0),
                       child: TextField(
@@ -151,7 +235,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
                       ),
                     ),
 
-                    // Data Table
+                    // Data Table (unchanged except for onPressed)
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -252,17 +336,8 @@ class _AdoptersPageState extends State<AdoptersPage> {
                                                     ? Colors.white
                                                     : Colors.black,
                                               ),
-                                              onPressed: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        AdopterDetailsPage(
-                                                            adopterData:
-                                                                adopter),
-                                                  ),
-                                                );
-                                              },
+                                              onPressed: () =>
+                                                  _showAdopterDetails(adopter),
                                             ),
                                           ),
                                         ],
@@ -288,7 +363,7 @@ class _AdoptersPageState extends State<AdoptersPage> {
                       ),
                     ),
 
-                    // Pagination Controls
+                    // Pagination Controls (unchanged)
                     if (filteredAdopters.length > rowsPerPage)
                       Padding(
                         padding: const EdgeInsets.all(8.0),

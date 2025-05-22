@@ -3,7 +3,8 @@ import 'dashboard_content.dart';
 import 'shelters_content.dart';
 import 'adopters_content.dart';
 import 'settings_content.dart';
-import 'blocked_users.dart';
+import 'blocked_shelters.dart';
+import 'reported_shelters_content.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,12 +25,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return const SheltersContent();
       case 'Adopters List':
         return const AdoptersPage();
-      case 'Reported Users':
-        return const Center(child: Text('Reported Users Page'));
-      case 'Blocked Users':
-        return const InactiveAdoptersPage();
-      case 'Admin Profile':
-        return const SettingsContent();
+      case 'Reported Shelters':
+        return ReportedSheltersScreen();
+      case 'Blocked Shelters':
+        return BlockedSheltersScreen();
       default:
         return const DashboardContent();
     }
@@ -53,7 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 curve: Curves.easeInOut, // Smooth easing curve
                 width: _isHovered ? 220 : 60, // Animate width on hover
                 color: const Color.fromARGB(
-                    135, 158, 158, 158), // Uniform sidebar color
+                    255, 7, 7, 41), // Uniform sidebar color
                 child: Column(
                   children: [
                     // Logo Section
@@ -78,7 +77,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
-                    const Divider(color: Colors.white54, height: 1),
+                    const Divider(
+                        color: Color.fromARGB(112, 255, 255, 255), height: 1),
 
                     // Menu Items with vertical scroll
                     Expanded(
@@ -89,9 +89,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           _buildMenuItem(
                               'All Shelter Accounts', Icons.home_work),
                           _buildMenuItem('Adopters List', Icons.people),
-                          _buildMenuItem('Reported Users', Icons.report),
-                          _buildMenuItem('Blocked Users', Icons.block),
-                          _buildMenuItem('Admin Profile', Icons.settings),
+                          _buildMenuItem('Reported Shelters', Icons.report),
+                          _buildMenuItem('Blocked Shelters', Icons.block),
                         ],
                       ),
                     ),
@@ -216,9 +215,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon,
                 color: isSelected
                     ? const Color.fromARGB(
-                        152, 90, 85, 176) // Icon color for selected item
+                        255, 255, 255, 255) // Icon color for selected item
                     : const Color.fromARGB(
-                        152, 90, 85, 176), // Icon color for unselected items
+                        255, 255, 255, 255), // Icon color for unselected items
               ),
               if (_isHovered)
                 Padding(
@@ -227,8 +226,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title,
                     style: TextStyle(
                       color: isSelected
-                          ? Colors.black // Text color for selected item
-                          : Colors.black, // Text color for unselected items
+                          ? const Color.fromARGB(255, 255, 255,
+                              255) // Text color for selected item
+                          : const Color.fromARGB(255, 255, 255,
+                              255), // Text color for unselected items
                     ),
                   ),
                 ),
