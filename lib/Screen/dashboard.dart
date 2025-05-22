@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dashboard_content.dart';
 import 'shelters_content.dart';
 import 'adopters_content.dart';
-import 'settings_content.dart';
 import 'blocked_shelters.dart';
 import 'reported_shelters_content.dart';
 

@@ -57,6 +57,29 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
     Navigator.pushReplacementNamed(context, '/login');
   }
 
+  Widget _buildShelterProfileImage(dynamic shelter) {
+    final profile = shelter['shelter_profile'];
+    if (profile == null || profile.isEmpty) {
+      return CircleAvatar(
+        backgroundColor: Colors.grey.shade300,
+        child: Icon(Icons.pets, color: Colors.grey.shade600),
+      );
+    }
+
+    try {
+      return CircleAvatar(
+        backgroundImage: MemoryImage(base64Decode(profile)),
+        backgroundColor: Colors.grey.shade300,
+      );
+    } catch (e) {
+      print('Error decoding base64 image: $e');
+      return CircleAvatar(
+        backgroundColor: Colors.grey.shade300,
+        child: Icon(Icons.error_outline, color: Colors.red),
+      );
+    }
+  }
+
   void _showBlockConfirmationDialog(BuildContext context, dynamic shelter) {
     showDialog(
       context: context,
@@ -72,8 +95,7 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(
-                  context); // Close dialog first (optional: move after success)
+              Navigator.pop(context);
               await _blockShelter(context, shelter['shelter_id']);
             },
             child: Text('Block'),
@@ -185,10 +207,7 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
                                       ? Colors.grey.shade300
                                       : Colors.transparent,
                                   child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundImage: NetworkImage(
-                                          'https://cdn-icons-png.flaticon.com/512/616/616408.png'),
-                                    ),
+                                    leading: _buildShelterProfileImage(shelter),
                                     title: Text(
                                       shelter['shelter_name'] ??
                                           'Unknown Shelter',
@@ -196,7 +215,7 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
                                           fontWeight: FontWeight.bold),
                                     ),
                                     subtitle: Text(
-                                        shelter['address'] ?? 'No address'),
+                                        '${shelter['total_reports'] ?? 0} reports'),
                                   ),
                                 ),
                               );
@@ -227,6 +246,35 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (selectedShelter != null) ...[
+                          Row(
+                            children: [
+                              _buildShelterProfileImage(selectedShelter),
+                              SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedShelter['shelter_name'] ??
+                                        'Unknown Shelter',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    selectedShelter['shelter_email'] ??
+                                        'No email',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+                        ],
                         Text(
                           'Report Details',
                           style: TextStyle(
@@ -238,33 +286,58 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
                         Expanded(
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              headingRowColor: MaterialStateProperty.all(
-                                  Colors.grey.shade200),
-                              columns: [
-                                DataColumn(label: Text('Adopter Name')),
-                                DataColumn(label: Text('Reason')),
-                                DataColumn(label: Text('Description')),
-                                DataColumn(label: Text('Date')),
-                              ],
-                              rows: selectedShelter != null
-                                  ? (selectedShelter['reports']
-                                              as List<dynamic>? ??
-                                          [])
-                                      .map((report) => DataRow(cells: [
-                                            DataCell(Text(report['reported_by']
-                                                    ?['adopter_name'] ??
-                                                'N/A')),
-                                            DataCell(Text(
-                                                report['reason'] ?? 'N/A')),
-                                            DataCell(Text(
-                                                report['description'] ??
-                                                    'N/A')),
-                                            DataCell(Text(
-                                                report['created_at'] ?? 'N/A')),
-                                          ]))
-                                      .toList()
-                                  : [],
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: DataTable(
+                                columnSpacing: 20,
+                                headingRowColor: MaterialStateProperty.all(
+                                    Colors.grey.shade200),
+                                columns: const [
+                                  DataColumn(
+                                      label: SizedBox(
+                                          width: 150,
+                                          child: Text('Adopter Name'))),
+                                  DataColumn(
+                                      label: SizedBox(
+                                          width: 150, child: Text('Reason'))),
+                                  DataColumn(
+                                      label: SizedBox(
+                                          width: 300,
+                                          child: Text('Description'))),
+                                  DataColumn(
+                                      label: SizedBox(
+                                          width: 150, child: Text('Date'))),
+                                ],
+                                rows: selectedShelter != null
+                                    ? (selectedShelter['reports']
+                                                as List<dynamic>? ??
+                                            [])
+                                        .map((report) => DataRow(cells: [
+                                              DataCell(SizedBox(
+                                                  width: 150,
+                                                  child: Text(report[
+                                                              'reported_by']
+                                                          ?['adopter_name'] ??
+                                                      'N/A'))),
+                                              DataCell(SizedBox(
+                                                  width: 150,
+                                                  child: Text(
+                                                      report['reason'] ??
+                                                          'N/A'))),
+                                              DataCell(SizedBox(
+                                                  width: 300,
+                                                  child: Text(
+                                                      report['description'] ??
+                                                          'N/A'))),
+                                              DataCell(SizedBox(
+                                                  width: 150,
+                                                  child: Text(
+                                                      report['created_at'] ??
+                                                          'N/A'))),
+                                            ]))
+                                        .toList()
+                                    : [],
+                              ),
                             ),
                           ),
                         ),
