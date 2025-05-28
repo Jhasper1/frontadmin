@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:admin/Screen/dashboard.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -27,8 +28,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     });
 
     try {
-      final url = Uri.parse('http://127.0.0.1:5566/admin/login');
-
+      final url = Uri.parse('http://127.0.0.1:4000/admin/login');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -39,7 +39,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       );
 
       final responseData = json.decode(response.body);
-      debugPrint('Full API Response: $responseData'); // Log the full response
+      debugPrint('Full API Response: $responseData');
 
       if (response.statusCode == 200) {
         if (responseData['data'] != null &&
@@ -51,26 +51,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('auth_token', token);
 
-          // Show the token in a dialog
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Login Successful'),
-              content: Text('Generated Token: $token'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
+          // Navigate directly to dashboard content using GoRouter
+          if (mounted) {
+            // Close any dialogs first if needed
+            Navigator.of(context, rootNavigator: true)
+                .popUntil((route) => route.isFirst);
 
-          // Navigate to the dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
-          );
+            // Use GoRouter to navigate to the dashboard content
+            GoRouter.of(context).go('/dashboard/content');
+          }
         } else {
           debugPrint('Token not found in the response');
           setState(() {
@@ -88,9 +77,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         _errorMessage = 'Connection error. Please try again.';
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -118,6 +109,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             ),
             child: Row(
               children: [
+                // Left side with images
                 Expanded(
                   flex: 5,
                   child: Stack(
@@ -150,12 +142,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ],
                   ),
                 ),
+
+                // Right side with login form
                 Expanded(
                   flex: 5,
                   child: Center(
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
+                        // Login form container
                         Container(
                           width: 400,
                           padding: const EdgeInsets.symmetric(
@@ -197,6 +192,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 32),
+
+                                // Username field
                                 TextFormField(
                                   controller: _usernameController,
                                   decoration: InputDecoration(
@@ -220,6 +217,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                   },
                                 ),
                                 const SizedBox(height: 20),
+
+                                // Password field
                                 TextFormField(
                                   controller: _passwordController,
                                   decoration: InputDecoration(
@@ -244,6 +243,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                   },
                                 ),
                                 const SizedBox(height: 20),
+
+                                // Error message
                                 if (_errorMessage != null)
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 16),
@@ -257,6 +258,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                     ),
                                   ),
                                 const SizedBox(height: 10),
+
+                                // Login button
                                 SizedBox(
                                   width: double.infinity,
                                   height: 50,
@@ -292,6 +295,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                             ),
                           ),
                         ),
+
+                        // Admin icon at top of form
                         Positioned(
                           top: -30,
                           left: 170,

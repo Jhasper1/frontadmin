@@ -2,442 +2,497 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'adopter_details_page.dart';
 
 class AdoptersPage extends StatefulWidget {
-  const AdoptersPage({super.key});
+  final Map<String, dynamic>? arguments;
+
+  const AdoptersPage({Key? key, this.arguments}) : super(key: key);
 
   @override
   State<AdoptersPage> createState() => _AdoptersPageState();
 }
 
 class _AdoptersPageState extends State<AdoptersPage> {
-  bool isLoading = true;
-  String searchQuery = '';
-  int currentPage = 0;
-  int rowsPerPage = 10;
-  bool isDarkMode = false;
   List<Map<String, dynamic>> adopters = [];
-  List<Map<String, dynamic>> filteredAdopters = [];
-  final TextEditingController searchController = TextEditingController();
+  bool isLoading = true;
+  String errorMessage = '';
+  int _rowsPerPage = 10;
+  int _currentPage = 0;
+  TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  Map<String, dynamic>? selectedAdopter;
 
   @override
   void initState() {
     super.initState();
-    _fetchAdopters();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+        _currentPage = 0;
+      });
+    });
+
+    // Check if arguments are passed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.arguments != null &&
+          widget.arguments!.containsKey('adopter_id')) {
+        _showAdopterDetails(widget.arguments!);
+      } else {
+        _fetchAdopters();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAdopters() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
 
-    final response = await http.get(
-      Uri.parse('http://127.0.0.1:5566/api/admin/getalladopters'),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-    );
+    if (token == null || token.isEmpty) {
+      throw Exception('No authentication token found');
+    }
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:4000/admin/getalladopterstry'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        debugPrint("API Response: $responseData");
+
+        if (responseData['retCode'] == '200') {
+          setState(() {
+            adopters =
+                List<Map<String, dynamic>>.from(responseData['data'] ?? []);
+            isLoading = false;
+          });
+        } else if (responseData['retCode'] == '401') {
+          _handleUnauthorized();
+        } else {
+          throw Exception(
+              'Failed to load adopters. Message: ${responseData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception('Failed to fetch data: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching adopters: $e');
       setState(() {
-        isLoading = false;
-        adopters = List<Map<String, dynamic>>.from(data['data']);
-        filteredAdopters = adopters;
-      });
-    } else {
-      setState(() {
+        errorMessage = 'Error: ${e.toString()}';
         isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load adopters')),
-      );
     }
   }
 
-  void _filterAdopters(String query) {
+  void _handleUnauthorized() {
     setState(() {
-      searchQuery = query;
-      filteredAdopters = adopters.where((adopter) {
-        final adopterInfo = adopter['info'] ?? {};
-        final fullName =
-            '${adopterInfo['first_name'] ?? ''} ${adopterInfo['last_name'] ?? ''}'
-                .toLowerCase();
-        return fullName.contains(query.toLowerCase());
-      }).toList();
-      currentPage = 0;
+      errorMessage = 'Session expired. Please log in again.';
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pushReplacementNamed(context, '/login');
     });
   }
 
-  List<Map<String, dynamic>> _getPaginatedAdopters() {
-    final startIndex = currentPage * rowsPerPage;
-    final endIndex = (currentPage + 1) * rowsPerPage;
-    return filteredAdopters.sublist(
-      startIndex,
-      endIndex > filteredAdopters.length ? filteredAdopters.length : endIndex,
-    );
+  int? _extractAdopterId(dynamic adopterData) {
+    if (adopterData['adopter_id'] is int) return adopterData['adopter_id'];
+    if (adopterData['adopter'] is Map &&
+        adopterData['adopter']['adopter_id'] is int) {
+      return adopterData['adopter']['adopter_id'];
+    }
+    if (adopterData['id'] is int) return adopterData['id'];
+    return null;
+  }
+
+  Map<String, dynamic> _normalizeAdopterData(Map<String, dynamic> adopter) {
+    final normalized = Map<String, dynamic>.from(adopter);
+    final adopterId = _extractAdopterId(adopter);
+
+    if (adopterId != null) {
+      normalized['adopter_id'] =
+          adopterId; // Ensure adopter_id is at the top level
+    }
+
+    // Ensure info and adopter fields are at the top level
+    if (adopter['adopter'] is Map) {
+      normalized['info'] = adopter['info'] ?? adopter['adopter']['info'] ?? {};
+      normalized['adopter'] = adopter['adopter'] ?? {};
+    }
+
+    debugPrint('Normalized adopter data: $normalized');
+    return normalized;
   }
 
   void _showAdopterDetails(Map<String, dynamic> adopter) {
-    final adopterInfo = adopter['info'] ?? {};
-    final adopterAccount = adopter['adopter'] ?? {};
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          insetPadding: const EdgeInsets.symmetric(
-              horizontal: 20), // Adds padding on sides
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 600, // Set maximum width
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Adopter Details',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildDetailRow('Name',
-                      '${adopterInfo['first_name'] ?? ''} ${adopterInfo['last_name'] ?? ''}'),
-                  _buildDetailRow('Email', adopterInfo['email'] ?? 'N/A'),
-                  _buildDetailRow(
-                      'Phone', adopterInfo['contact_number'] ?? 'N/A'),
-                  _buildDetailRow('Address', adopterInfo['address'] ?? 'N/A'),
-                  _buildDetailRow('Gender', adopterInfo['sex'] ?? 'N/A'),
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+    final normalizedAdopter = _normalizeAdopterData(adopter);
+    setState(() {
+      selectedAdopter = normalizedAdopter;
+    });
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-          ),
-        ],
+  void _goBackToList() {
+    setState(() {
+      selectedAdopter = null;
+    });
+  }
+
+  List<Map<String, dynamic>> _filterAdopters() {
+    if (_searchQuery.isEmpty) return adopters;
+
+    return adopters.where((adopter) {
+      final info = adopter['info'] ?? {};
+      final fullName = '${info['first_name'] ?? ''} ${info['last_name'] ?? ''}'
+          .toLowerCase();
+      return fullName.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _getPaginatedAdopters() {
+    final filtered = _filterAdopters();
+    final startIndex = _currentPage * _rowsPerPage;
+    final endIndex = startIndex + _rowsPerPage;
+    return filtered.sublist(
+        startIndex, endIndex > filtered.length ? filtered.length : endIndex);
+  }
+
+  void _showErrorMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xff1e1e20) : const Color(0xfffbfbfe),
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              errorMessage,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _fetchAdopters,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
         ),
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    // Search Bar (unchanged)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: TextField(
-                        controller: searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search by adopter name...',
-                          hintStyle: TextStyle(
-                            color: isDarkMode
-                                ? Colors.grey[400]
-                                : Colors.grey[700],
+      );
+    }
+
+    final filteredAdopters = _filterAdopters();
+    final paginatedAdopters = _getPaginatedAdopters();
+
+    return Container(
+      margin: const EdgeInsets.only(left: 16),
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xfffbfbfe),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: selectedAdopter == null
+          ? Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Adopters (${filteredAdopters.length})',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xff1e1e20),
                           ),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: isDarkMode
-                                ? Colors.grey[400]
-                                : Colors.grey[700],
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
-                            borderSide: BorderSide(
-                              color: isDarkMode
-                                  ? Colors.grey[700]!
-                                  : Colors.grey[300]!,
-                            ),
-                          ),
-                          filled: true,
-                          fillColor:
-                              isDarkMode ? Colors.grey[800] : Colors.white,
-                          suffixIcon: searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.clear,
-                                    color: isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700],
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      searchController.clear();
-                                      searchQuery = '';
-                                      filteredAdopters = adopters;
-                                      currentPage = 0;
-                                    });
-                                  },
-                                )
-                              : null,
                         ),
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                        onChanged: _filterAdopters,
-                      ),
+                      ],
                     ),
-
-                    // Data Table (unchanged except for onPressed)
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Container(
-                            width: constraints.maxWidth,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: isDarkMode
-                                    ? Colors.grey[700]!
-                                    : Colors.grey[300]!,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 400,
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by adopter name...',
+                              hintStyle: const TextStyle(
+                                color: Colors.grey,
                               ),
-                              borderRadius: BorderRadius.circular(8),
-                              color:
-                                  isDarkMode ? Colors.grey[900] : Colors.white,
-                            ),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minWidth: constraints.maxWidth,
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                color: Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.0),
+                                borderSide: const BorderSide(
+                                  color: Colors.grey,
                                 ),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.vertical,
-                                  child: DataTable(
-                                    columns: const [
-                                      DataColumn(
-                                          label: Text('Name',
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold))),
-                                      DataColumn(
-                                          label: Text('Email',
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold))),
-                                      DataColumn(
-                                          label: Text('Phone',
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold))),
-                                      DataColumn(
-                                          label: Text('Address',
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold))),
-                                      DataColumn(
-                                          label: Text('Actions',
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold))),
-                                    ],
-                                    rows:
-                                        _getPaginatedAdopters().map((adopter) {
-                                      final adopterInfo = adopter['info'] ?? {};
-                                      final adopterAccount =
-                                          adopter['adopter'] ?? {};
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear,
+                                        color: Colors.grey,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _searchController.clear();
+                                          _searchQuery = '';
+                                          _currentPage = 0;
+                                        });
+                                      },
+                                    )
+                                  : null,
+                            ),
+                            style: const TextStyle(
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.grey[300]!,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(
+                                        label: Text('Name',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Email',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Phone',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Address',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Actions',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                  ],
+                                  rows: paginatedAdopters.map((adopter) {
+                                    final info = adopter['info'] ?? {};
+                                    final account = adopter['adopter'] ?? {};
 
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text(
-                                            '${adopterInfo['first_name'] ?? ''} ${adopterInfo['last_name'] ?? ''}',
-                                            style: TextStyle(
-                                              color: isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          )),
-                                          DataCell(Text(
-                                            adopterAccount['email'] ?? 'N/A',
-                                            style: TextStyle(
-                                              color: isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          )),
-                                          DataCell(Text(
-                                            adopterInfo['contact_number'] ??
-                                                'N/A',
-                                            style: TextStyle(
-                                              color: isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          )),
-                                          DataCell(Text(
-                                            adopterInfo['address'] ?? 'N/A',
-                                            style: TextStyle(
-                                              color: isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          )),
-                                          DataCell(
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.visibility,
-                                                color: isDarkMode
-                                                    ? Colors.white
-                                                    : Colors.black,
+                                    return DataRow(
+                                      onSelectChanged: (_) =>
+                                          _showAdopterDetails(adopter),
+                                      cells: [
+                                        DataCell(
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                                maxWidth: 200),
+                                            child: Text(
+                                              '${info['first_name'] ?? ''} ${info['last_name'] ?? ''}',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.black,
                                               ),
-                                              onPressed: () =>
-                                                  _showAdopterDetails(adopter),
                                             ),
                                           ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                    headingRowColor: MaterialStateProperty
-                                        .resolveWith<Color>(
-                                      (Set<MaterialState> states) => isDarkMode
-                                          ? Colors.grey[800]!
-                                          : Colors.grey[200]!,
-                                    ),
-                                    dataRowHeight: 60,
-                                    headingRowHeight: 50,
-                                    horizontalMargin: 20,
-                                    columnSpacing: 30,
-                                    showCheckboxColumn: false,
+                                        ),
+                                        DataCell(Text(
+                                          info['email'] ?? 'Not provided',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                        )),
+                                        DataCell(Text(
+                                          info['contact_number'] ??
+                                              'Not provided',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                        )),
+                                        DataCell(Text(
+                                          info['address'] ?? 'Not provided',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                        )),
+                                        DataCell(
+                                          Row(
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.visibility,
+                                                  size: 20,
+                                                  color: Colors.black,
+                                                ),
+                                                onPressed: () =>
+                                                    _showAdopterDetails(
+                                                        adopter),
+                                                tooltip: 'View Details',
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
+                                  headingRowColor:
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (Set<MaterialState> states) =>
+                                        Colors.grey[200]!,
                                   ),
+                                  dataRowHeight: 60,
+                                  headingRowHeight: 50,
+                                  horizontalMargin: 20,
+                                  columnSpacing: 30,
+                                  showCheckboxColumn: false,
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
-
-                    // Pagination Controls (unchanged)
-                    if (filteredAdopters.length > rowsPerPage)
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            DropdownButton<int>(
-                              value: rowsPerPage,
-                              dropdownColor:
-                                  isDarkMode ? Colors.grey[800] : Colors.white,
-                              items: [5, 10, 25, 50].map((int value) {
-                                return DropdownMenuItem<int>(
-                                  value: value,
-                                  child: Text(
-                                    '$value per page',
-                                    style: TextStyle(
-                                      color: isDarkMode
-                                          ? Colors.white
-                                          : Colors.black,
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                if (value != null) {
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        DropdownButton<int>(
+                          value: _rowsPerPage,
+                          dropdownColor:
+                              const Color.fromARGB(255, 255, 255, 255),
+                          items: [5, 10].map((int value) {
+                            return DropdownMenuItem<int>(
+                              value: value,
+                              child: Text(
+                                '$value per page',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _rowsPerPage = value;
+                                _currentPage = 0;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.black,
+                          ),
+                          onPressed: _currentPage > 0
+                              ? () {
                                   setState(() {
-                                    rowsPerPage = value;
-                                    currentPage = 0;
+                                    _currentPage--;
                                   });
                                 }
-                              },
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              '${currentPage * rowsPerPage + 1}-${(currentPage + 1) * rowsPerPage > filteredAdopters.length ? filteredAdopters.length : (currentPage + 1) * rowsPerPage} of ${filteredAdopters.length}',
-                              style: TextStyle(
-                                color: isDarkMode ? Colors.white : Colors.black,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            IconButton(
-                              icon: Icon(
-                                Icons.chevron_left,
-                                color: isDarkMode ? Colors.white : Colors.black,
-                              ),
-                              onPressed: currentPage > 0
-                                  ? () {
-                                      setState(() {
-                                        currentPage--;
-                                      });
-                                    }
-                                  : null,
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.chevron_right,
-                                color: isDarkMode ? Colors.white : Colors.black,
-                              ),
-                              onPressed: (currentPage + 1) * rowsPerPage <
-                                      filteredAdopters.length
-                                  ? () {
-                                      setState(() {
-                                        currentPage++;
-                                      });
-                                    }
-                                  : null,
-                            ),
-                          ],
+                              : null,
                         ),
-                      ),
-                  ],
-                ),
+                        Text(
+                          'Page ${_currentPage + 1} of ${(filteredAdopters.length / _rowsPerPage).ceil()}',
+                          style: const TextStyle(
+                            color: Colors.black,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.black,
+                          ),
+                          onPressed: (_currentPage + 1) * _rowsPerPage <
+                                  filteredAdopters.length
+                              ? () {
+                                  setState(() {
+                                    _currentPage++;
+                                  });
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-      ),
+            )
+          : AdopterDetailsScreen(
+              adopter: selectedAdopter!,
+              onBack: _goBackToList,
+              onApprove: (Map<String, dynamic> p1) {},
+            ),
     );
   }
 }

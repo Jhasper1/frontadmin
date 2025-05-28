@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'shelter_details_page.dart'; // Import the new ShelterDetailsPage
 
 class SheltersContent extends StatefulWidget {
-  const SheltersContent({Key? key}) : super(key: key);
+  final Map<String, dynamic>? arguments;
+
+  const SheltersContent({Key? key, this.arguments}) : super(key: key);
 
   @override
   _SheltersContentState createState() => _SheltersContentState();
@@ -20,12 +23,23 @@ class _SheltersContentState extends State<SheltersContent> {
   int _currentPage = 0;
   TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool isDarkMode = false;
+  Map<String, dynamic>? selectedShelter;
 
   @override
   void initState() {
     super.initState();
-    _fetchShelters();
+
+    // Check if arguments are passed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.arguments != null &&
+          widget.arguments!.containsKey('shelter_id')) {
+        // Show the shelter details based on the passed arguments
+        _showShelterDetails(widget.arguments!);
+      } else {
+        // Fetch shelters if no arguments are passed
+        _fetchShelters();
+      }
+    });
   }
 
   @override
@@ -47,7 +61,7 @@ class _SheltersContentState extends State<SheltersContent> {
       errorMessage = '';
     });
 
-    final url = 'http://127.0.0.1:5566/api/admin/getallshelterstry';
+    final url = 'http://127.0.0.1:4000/api/admin/getallshelterstry';
     final headers = {
       "Content-Type": "application/json",
       "Authorization": "Bearer $token",
@@ -148,7 +162,7 @@ class _SheltersContentState extends State<SheltersContent> {
 
       final response = await http.put(
         Uri.parse(
-            'http://127.0.0.1:5566/api/admin/shelters/$shelterId/approve'),
+            'http://127.0.0.1:4000/api/admin/shelters/$shelterId/approve'),
         headers: {
           'Content-Type': 'application/json',
           "Authorization": "Bearer $token",
@@ -158,7 +172,6 @@ class _SheltersContentState extends State<SheltersContent> {
       if (response.statusCode == 200) {
         _handleApprovalSuccess(shelterData, shelterId);
         _showSuccessMessage('Shelter approved successfully!');
-        Navigator.of(context).pop();
       } else {
         final error = json.decode(response.body);
         throw Exception(error['message'] ??
@@ -181,6 +194,7 @@ class _SheltersContentState extends State<SheltersContent> {
     setState(() {
       pendingShelters.removeAt(index);
       approvedShelters.add(approvedShelter);
+      selectedShelter = approvedShelter;
     });
   }
 
@@ -219,70 +233,38 @@ class _SheltersContentState extends State<SheltersContent> {
     );
   }
 
-  void _showShelterDialog(dynamic shelterData) {
-    final info = shelterData['info'] ?? {};
-    final status = _isShelterApproved(shelterData) ? 'Approved' : 'Pending';
+  Map<String, dynamic> _normalizeShelterData(Map<String, dynamic> shelter) {
+    final normalized = Map<String, dynamic>.from(shelter);
+    final shelterId = _extractShelterId(shelter);
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Shelter Details ($status)'),
-        content: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.7,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDetailRow('Name', info['shelter_name']),
-                _buildDetailRow('Address', info['shelter_address']),
-                _buildDetailRow('Contact', info['shelter_contact']),
-                _buildDetailRow('Email', info['shelter_email']),
-                _buildDetailRow('Status', status),
-                if (info['description'] != null)
-                  _buildDetailRow('Description', info['description']),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          if (!_isShelterApproved(shelterData))
-            ElevatedButton(
-              onPressed: () => _approveShelter(shelterData),
-              child: const Text('Approve'),
-            ),
-        ],
-      ),
-    );
+    if (shelterId != null) {
+      normalized['shelter_id'] =
+          shelterId; // Ensure shelter_id is at the top level
+    }
+
+    // Ensure reg_status and info are at the top level
+    if (shelter['shelter'] is Map) {
+      normalized['reg_status'] = shelter['shelter']['reg_status'] ??
+          shelter['reg_status'] ??
+          'pending';
+      normalized['info'] = shelter['info'] ?? shelter['shelter']['info'] ?? {};
+    }
+
+    debugPrint('Normalized shelter data: $normalized');
+    return normalized;
   }
 
-  Widget _buildDetailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value ?? 'Not provided',
-              softWrap: true,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _showShelterDetails(Map<String, dynamic> shelter) {
+    final normalizedShelter = _normalizeShelterData(shelter);
+    setState(() {
+      selectedShelter = normalizedShelter;
+    });
+  }
+
+  void _goBackToList() {
+    setState(() {
+      selectedShelter = null;
+    });
   }
 
   List<dynamic> _filterShelters(List<dynamic> shelters) {
@@ -317,8 +299,8 @@ class _SheltersContentState extends State<SheltersContent> {
           children: [
             Text(
               errorMessage,
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.red,
+              style: const TextStyle(
+                color: Colors.red,
                 fontSize: 16,
               ),
               textAlign: TextAlign.center,
@@ -327,7 +309,7 @@ class _SheltersContentState extends State<SheltersContent> {
             ElevatedButton(
               onPressed: _fetchShelters,
               style: ElevatedButton.styleFrom(
-                backgroundColor: isDarkMode ? Colors.grey[800] : Colors.blue,
+                backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -345,328 +327,319 @@ class _SheltersContentState extends State<SheltersContent> {
 
     final paginatedShelters = _getPaginatedShelters(filteredShelters);
 
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Row for Pending/Approved Shelters
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      margin: const EdgeInsets.only(left: 16),
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xfffbfbfe),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: selectedShelter == null
+          ? Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    showApproved
-                        ? 'Approved Shelters (${filteredShelters.length})'
-                        : 'Pending Shelters (${filteredShelters.length})',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color:
-                          isDarkMode ? Colors.white : const Color(0xff1e1e20),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            showApproved = !showApproved; // Toggle the state
-                            _currentPage = 0; // Reset the current page
-                          });
-                        },
-                        child: Text(
-                          showApproved ? 'Show Pending' : 'Show Approved',
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.blue[300] : Colors.blue,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          showApproved
+                              ? 'Approved Shelters (${filteredShelters.length})'
+                              : 'Pending Shelters (${filteredShelters.length})',
+                          style: const TextStyle(
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Color(0xff1e1e20),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: MediaQuery.of(context).size.width *
-                        0.4, // 40% of the screen width
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search by shelter name...',
-                        hintStyle: TextStyle(
-                          color:
-                              isDarkMode ? Colors.grey[400] : Colors.grey[700],
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color:
-                              isDarkMode ? Colors.grey[400] : Colors.grey[700],
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                          borderSide: BorderSide(
-                            color: isDarkMode
-                                ? Colors.grey[700]!
-                                : Colors.grey[300]!,
-                          ),
-                        ),
-                        filled: true,
-                        fillColor: isDarkMode ? Colors.grey[800] : Colors.white,
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.clear,
-                                  color: isDarkMode
-                                      ? Colors.grey[400]
-                                      : Colors.grey[700],
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  showApproved = !showApproved;
+                                  _currentPage = 0;
+                                });
+                              },
+                              child: Text(
+                                showApproved ? 'Show Pending' : 'Show Approved',
+                                style: const TextStyle(
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                onPressed: () {
-                                  setState(() {
-                                    _searchController.clear();
-                                    _searchQuery = '';
-                                    _currentPage = 0;
-                                  });
-                                },
-                              )
-                            : null,
-                      ),
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black,
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                          _currentPage = 0;
-                        });
-                      },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // Data Table
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Container(
-                    width: constraints.maxWidth,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color:
-                            isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      color: isDarkMode ? Colors.grey[900] : Colors.white,
-                    ),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: constraints.maxWidth,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 400,
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by shelter name...',
+                              hintStyle: const TextStyle(
+                                color: Colors.grey,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                color: Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.0),
+                                borderSide: const BorderSide(
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear,
+                                        color: Colors.grey,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _searchController.clear();
+                                          _searchQuery = '';
+                                          _currentPage = 0;
+                                        });
+                                      },
+                                    )
+                                  : null,
+                            ),
+                            style: const TextStyle(
+                              color: Colors.black,
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _searchQuery = value;
+                                _currentPage = 0;
+                              });
+                            },
+                          ),
                         ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(
-                                  label: Text('Name',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Contact',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Email',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Status',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Actions',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold))),
-                            ],
-                            rows: paginatedShelters.map((shelter) {
-                              final info = shelter['info'] ?? {};
-                              final status = _isShelterApproved(shelter)
-                                  ? 'Approved'
-                                  : 'Pending';
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.grey[300]!,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(
+                                        label: Text('Name',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Contact',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Email',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Status',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                    DataColumn(
+                                        label: Text('Actions',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold))),
+                                  ],
+                                  rows: paginatedShelters.map((shelter) {
+                                    final info = shelter['info'] ?? {};
+                                    final status = _isShelterApproved(shelter)
+                                        ? 'Approved'
+                                        : 'Pending';
 
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    ConstrainedBox(
-                                      constraints:
-                                          const BoxConstraints(maxWidth: 200),
-                                      child: Text(
-                                        info['shelter_name'] ??
-                                            'Unnamed Shelter',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: isDarkMode
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(Text(
-                                    info['shelter_contact'] ?? 'Not provided',
-                                    style: TextStyle(
-                                      color: isDarkMode
-                                          ? Colors.white
-                                          : Colors.black,
-                                    ),
-                                  )),
-                                  DataCell(Text(
-                                    info['shelter_email'] ?? 'Not provided',
-                                    style: TextStyle(
-                                      color: isDarkMode
-                                          ? Colors.white
-                                          : Colors.black,
-                                    ),
-                                  )),
-                                  DataCell(
-                                    Chip(
-                                      label: Text(
-                                        status,
-                                        style: TextStyle(
-                                          color: status == 'Approved'
-                                              ? Colors.green
-                                              : Colors.orange,
-                                        ),
-                                      ),
-                                      backgroundColor: status == 'Approved'
-                                          ? Colors.green[50]
-                                          : Colors.orange[50],
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.visibility,
-                                            size: 20,
-                                            color: isDarkMode
-                                                ? Colors.white
-                                                : Colors.black,
+                                    return DataRow(
+                                      onSelectChanged: (_) =>
+                                          _showShelterDetails(shelter),
+                                      cells: [
+                                        DataCell(
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                                maxWidth: 200),
+                                            child: Text(
+                                              info['shelter_name'] ??
+                                                  'Unnamed Shelter',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.black,
+                                              ),
+                                            ),
                                           ),
-                                          onPressed: () =>
-                                              _showShelterDialog(shelter),
-                                          tooltip: 'View Details',
+                                        ),
+                                        DataCell(Text(
+                                          info['shelter_contact'] ??
+                                              'Not provided',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                        )),
+                                        DataCell(Text(
+                                          info['shelter_email'] ??
+                                              'Not provided',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                        )),
+                                        DataCell(
+                                          Chip(
+                                            label: Text(
+                                              status,
+                                              style: TextStyle(
+                                                color: status == 'Approved'
+                                                    ? Colors.green
+                                                    : Colors.orange,
+                                              ),
+                                            ),
+                                            backgroundColor:
+                                                status == 'Approved'
+                                                    ? Colors.green[50]
+                                                    : Colors.orange[50],
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Row(
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.visibility,
+                                                  size: 20,
+                                                  color: Colors.black,
+                                                ),
+                                                onPressed: () =>
+                                                    _showShelterDetails(
+                                                        shelter),
+                                                tooltip: 'View Details',
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
-                                    ),
+                                    );
+                                  }).toList(),
+                                  headingRowColor:
+                                      MaterialStateProperty.resolveWith<Color>(
+                                    (Set<MaterialState> states) =>
+                                        Colors.grey[200]!,
                                   ),
-                                ],
-                              );
-                            }).toList(),
-                            headingRowColor:
-                                MaterialStateProperty.resolveWith<Color>(
-                              (Set<MaterialState> states) => isDarkMode
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[200]!,
-                            ),
-                            dataRowHeight: 60,
-                            headingRowHeight: 50,
-                            horizontalMargin: 20,
-                            columnSpacing: 30,
-                            showCheckboxColumn: false,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // Pagination Controls
-            if (filteredShelters.length > _rowsPerPage)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    DropdownButton<int>(
-                      value: _rowsPerPage,
-                      dropdownColor:
-                          isDarkMode ? Colors.grey[800] : Colors.white,
-                      items: [5, 10, 25, 50].map((int value) {
-                        return DropdownMenuItem<int>(
-                          value: value,
-                          child: Text(
-                            '$value per page',
-                            style: TextStyle(
-                              color: isDarkMode ? Colors.white : Colors.black,
+                                  dataRowHeight: 60,
+                                  headingRowHeight: 50,
+                                  horizontalMargin: 20,
+                                  columnSpacing: 30,
+                                  showCheckboxColumn: false,
+                                ),
+                              ),
                             ),
                           ),
                         );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _rowsPerPage = value;
-                            _currentPage = 0;
-                          });
-                        }
                       },
                     ),
-                    const SizedBox(width: 16),
-                    Text(
-                      '${_currentPage * _rowsPerPage + 1}-${(_currentPage + 1) * _rowsPerPage > filteredShelters.length ? filteredShelters.length : (_currentPage + 1) * _rowsPerPage} of ${filteredShelters.length}',
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    IconButton(
-                      icon: Icon(
-                        Icons.chevron_left,
-                        color: isDarkMode ? Colors.white : Colors.black,
-                      ),
-                      onPressed: _currentPage > 0
-                          ? () {
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        DropdownButton<int>(
+                          value: _rowsPerPage,
+                          dropdownColor:
+                              const Color.fromARGB(255, 255, 255, 255),
+                          items: [5, 10].map((int value) {
+                            return DropdownMenuItem<int>(
+                              value: value,
+                              child: Text(
+                                '$value per page',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
                               setState(() {
-                                _currentPage--;
+                                _rowsPerPage = value;
+                                _currentPage = 0;
                               });
                             }
-                          : null,
+                          },
+                        ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.black,
+                          ),
+                          onPressed: _currentPage > 0
+                              ? () {
+                                  setState(() {
+                                    _currentPage--;
+                                  });
+                                }
+                              : null,
+                        ),
+                        Text(
+                          'Page ${_currentPage + 1} of ${(filteredShelters.length / _rowsPerPage).ceil()}',
+                          style: const TextStyle(
+                            color: Colors.black,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.black,
+                          ),
+                          onPressed: (_currentPage + 1) * _rowsPerPage <
+                                  filteredShelters.length
+                              ? () {
+                                  setState(() {
+                                    _currentPage++;
+                                  });
+                                }
+                              : null,
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.chevron_right,
-                        color: isDarkMode ? Colors.white : Colors.black,
-                      ),
-                      onPressed: (_currentPage + 1) * _rowsPerPage <
-                              filteredShelters.length
-                          ? () {
-                              setState(() {
-                                _currentPage++;
-                              });
-                            }
-                          : null,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-          ],
-        ),
-      ),
+            )
+          : ShelterDetailsPage(
+              shelter: selectedShelter!,
+              onApprove: _approveShelter,
+              onBack: _goBackToList,
+            ),
     );
   }
 }

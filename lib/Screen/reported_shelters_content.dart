@@ -4,6 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ReportedSheltersScreen extends StatefulWidget {
+  final Map<String, dynamic>? arguments;
+
+  ReportedSheltersScreen({Key? key, this.arguments}) : super(key: key);
+
   @override
   _ReportedSheltersScreenState createState() => _ReportedSheltersScreenState();
 }
@@ -12,15 +16,27 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
   late Future<Map<String, dynamic>> _reports;
   List<dynamic> shelters = [];
   dynamic selectedShelter;
+  bool _isHovered = false; // Track sidebar hover state
 
   @override
   void initState() {
     super.initState();
+
+    // Fetch reports
     _reports = fetchSubmittedReports();
     _reports.then((data) {
       setState(() {
         shelters = data['data'] ?? [];
-        if (shelters.isNotEmpty) {
+
+        // Check if arguments are passed
+        if (widget.arguments != null &&
+            widget.arguments!.containsKey('shelter_id')) {
+          final shelterId = widget.arguments!['shelter_id'];
+          selectedShelter = shelters.firstWhere(
+            (shelter) => shelter['shelter_id'] == shelterId,
+            orElse: () => shelters.isNotEmpty ? shelters[0] : null,
+          );
+        } else if (shelters.isNotEmpty) {
           selectedShelter = shelters[0];
         }
       });
@@ -36,7 +52,7 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
     }
 
     final response = await http.get(
-      Uri.parse('http://127.0.0.1:5566/admin/allreports'),
+      Uri.parse('http://127.0.0.1:4000/admin/allreports'),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
@@ -117,7 +133,7 @@ class _ReportedSheltersScreenState extends State<ReportedSheltersScreen> {
     }
 
     final response = await http.put(
-      Uri.parse('http://127.0.0.1:5566/admin/shelters/$shelterId/status'),
+      Uri.parse('http://127.0.0.1:4000/admin/shelters/$shelterId/status'),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Screen/login.dart';
+import 'routes/routes.dart'; // Import the routes.dart file
 
 void main() {
   runApp(const MyApp());
@@ -10,7 +10,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'PETHUB',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const AdminLoginScreen(),
+      routerConfig: router, // Use GoRouter's routerConfig
     );
   }
 }

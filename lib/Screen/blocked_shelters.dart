@@ -36,7 +36,7 @@ class _BlockedSheltersScreenState extends State<BlockedSheltersScreen> {
     }
 
     final response = await http.get(
-      Uri.parse('http://127.0.0.1:5566/admin/blockedshelters'),
+      Uri.parse('http://127.0.0.1:4000/admin/blockedshelters'),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
@@ -117,7 +117,7 @@ class _BlockedSheltersScreenState extends State<BlockedSheltersScreen> {
     }
 
     final response = await http.put(
-      Uri.parse('http://127.0.0.1:5566/admin/shelters/$shelterId/activate'),
+      Uri.parse('http://127.0.0.1:4000/admin/shelters/$shelterId/activate'),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",

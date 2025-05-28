@@ -59,7 +59,7 @@ class _DashboardContentState extends State<DashboardContent> {
   }
 
   Future<void> _fetchDashboardData() async {
-    const baseUrl = 'http://127.0.0.1:5566';
+    const baseUrl = 'http://127.0.0.1:4000';
 
     try {
       final responses = await Future.wait([
@@ -106,6 +106,10 @@ class _DashboardContentState extends State<DashboardContent> {
             }
           }
         }
+
+        // Filter only active shelters
+        shelterCount = approvedShelters + pendingShelters;
+
         isLoading = false;
       });
     } catch (e) {
@@ -119,16 +123,10 @@ class _DashboardContentState extends State<DashboardContent> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFE0E0E0), Color(0xFFB3E5FC)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : errorMessage.isNotEmpty
@@ -234,15 +232,14 @@ class _DashboardContentState extends State<DashboardContent> {
                                             MainAxisAlignment.center,
                                         children: [
                                           _buildLegendItem(
-                                            'Approved',
-                                            const Color.fromARGB(
-                                                255, 140, 152, 222),
-                                          ),
+                                              'Approved',
+                                              const Color.fromARGB(
+                                                  255, 79, 96, 191)),
                                           const SizedBox(width: 20),
                                           _buildLegendItem(
                                             'Pending',
                                             const Color.fromARGB(
-                                                255, 79, 96, 191),
+                                                255, 140, 152, 222),
                                           ),
                                         ],
                                       ),
@@ -270,6 +267,7 @@ class _DashboardContentState extends State<DashboardContent> {
       final radius = isTouched ? 70.0 : 60.0;
 
       if (index == 0) {
+        // Approved shelters
         return PieChartSectionData(
           value: approvedShelters.toDouble(),
           color: const Color.fromARGB(255, 79, 98, 191),
@@ -281,6 +279,7 @@ class _DashboardContentState extends State<DashboardContent> {
               const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         );
       } else {
+        // Pending shelters
         return PieChartSectionData(
           value: pendingShelters.toDouble(),
           color: const Color.fromARGB(255, 140, 159, 222),
